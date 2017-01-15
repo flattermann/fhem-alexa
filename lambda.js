@@ -21,8 +21,8 @@ exports.handler = function(event, context, callback) {
     headers: {
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(post_data)
-      }
-    };
+    }
+  };
 
   var request = require('https').request(options, (result) => {
     console.log(`STATUS: ${result.statusCode}`);

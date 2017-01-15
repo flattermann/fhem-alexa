@@ -5,10 +5,38 @@
 - custom skill
   wecker, antworten
 
-- lambda.js aufräumen
+- indikator für steuerung über alexa (/anderes frontend) <-> automatische steuerung
+- kommandos nicht direkt, sondern über das alexa device absetzen? -> vorher flag setzen, nachher löschen
+- disabled/disabledForIntervals im alexa device
+- allowed einbauen?
 
-- NAT-UPNP fixen, konfigurierbar machen, refresh mapping
-- NAT-PMP refresh mapping, konfigurierbar machen (auch gateway)
+- NAT-UPNP fixen
+- NAT-PMP
 
 - proxy?
-- 
+
+- bei mehreren möglichen characteristics die passende anhand des value finden
+  intentOfValue oder indexOf auf valuesOfIntent
+
+- property bei kommandos mit einbauen
+  stelle die Helligkeit ...
+  stelle die Farbe ...
+  stelle die Sättigung ...
+  default property pro device
+
+frage
+ - nach bestimmter characteristic/property
+   welche <property> hat <article> <device> [[<preposition>] <room>]
+   wie [hoch] ist <article> [<property>] (<device>|<room>)
+ - nach status
+
+mehrfach werte setzen:
+ - wecker mit wochentag und uhrzeit
+
+alexaConfirmationLevel=2,1
+  2 -> lang
+  1 -> ok
+
+alexaStatusLevel=2,1
+  2 -> alle konfigurierten characteristics
+  1 -> nur die status characteristic
