@@ -7,7 +7,7 @@ var natupnp = require('nat-upnp');
 var path = require('path');
 var fs = require('fs');
 
-var version = require('./version');
+var accessoryStorage = require('node-persist').create();
 
 var User = require('./user').User;
 
@@ -75,7 +75,7 @@ Server.prototype.startServer = function() {
         var event = JSON.parse(body);
         //console.log(event);
         verifyToken.bind(this)(event, function(ret) {
-          console.log('response :'+ JSON.stringify(ret));
+          console.log('response :' + JSON.stringify(ret));
           response.end(JSON.stringify(ret)); });
 
       } catch (error) {
@@ -146,43 +146,7 @@ function open_upnp() {
 }
 
 
-Server.prototype.addDevice = function(device, fhem) {
-  device.fhem = fhem;
-
-  this.devices[device.device.toLowerCase()] = device;
-
-  for( var characteristic_type in device.mappings ) {
-    if( characteristic_type == 'On'
-        || characteristic_type == 'Brightness' || characteristic_type == 'TargetPosition'
-        || characteristic_type == 'TargetTemperature' ) {
-      device.subscribe( device.mappings[characteristic_type] );
-    }
-  }
-
-  if(device.room) {
-    this.namesOfRoom = {};
-    this.roomsOfName = {};
-
-    for( name in this.devices ) {
-      var device = this.devices[name];
-      if( !device ) continue;
-      var room = device.room?device.room.toLowerCase():undefined;
-      var name = device.alexaName.toLowerCase();
-
-      if( room ) {
-        if( !this.namesOfRoom[room] ) this.namesOfRoom[room] = [];
-        this.namesOfRoom[room].push( name );
-      }
-
-      if( !this.roomsOfName[name] ) this.roomsOfName[name] = [];
-      this.roomsOfName[name].push( room );
-    }
-  }
-}
-
 Server.prototype.run = function() {
-  log.info( 'this alexa-fhem '+ version );
-
   if( !this._config.connections ) {
     log.error( 'no connections in config file' );
     process.exit( -1 );
@@ -199,58 +163,38 @@ Server.prototype.run = function() {
   log.info('Fetching FHEM devices...');
 
   this.devices = {};
-  this.connections = [];
   this.namesOfRoom = {};
   this.roomsOfName = {};
+  this.connections = [];
   for( connection of this._config.connections ) {
     var fhem = new FHEM(Logger.withPrefix(connection.name), connection);
     //fhem.on( 'DEFINED', function() {log.error( 'DEFINED' )}.bind(this) );
 
-    //fhem.on( 'RELOAD', connect.bind(this) );
-    fhem.on( 'RELOAD', function(fhem, n) {
-      if( n )
-        log.info( 'reloading '+ n +' from '+ fhem.connection.base_url );
-      else
-        log.info( 'reloading '+ fhem.connection.base_url );
-
-      for( name in this.devices ) {
-        var device = this.devices[name];
-        if( !device ) continue;
-        if( n && device.name !== n ) continue;
-        if( device.fhem.connection.base_url !== fhem.connection.base_url ) continue;
-
-        log.info( 'removing '+ device.name  +' from '+  device.fhem.connection.base_url );
-
-        fhem = device.fhem;
-
-        device.unsubscribe();
-
-        delete this.devices[name];
-      }
-
-      if( n ) {
-        fhem.connect( function(fhem, devices) {
-          for( device of devices ) {
-            this.addDevice(device, fhem);
-          }
-        }.bind(this, fhem), 'NAME='+n );
-      } else {
-        for( fhem of this.connections ) {
-          fhem.connect( function(fhem,devices) {
-            for( device of devices ) {
-              this.addDevice(device, fhem);
-            }
-          }.bind(this, fhem) );
-       }
-     }
-
-    }.bind(this, fhem) );
-
-    fhem.connect( function(fhem, devices) {
+    fhem.connect( function(devices){
       for( device of devices ) {
-        this.addDevice(device, fhem);
+        device.fhem = fhem;
+
+        this.devices[device.device.toLowerCase()] = device;
+        if(device.room) {
+          var room = device.room.toLowerCase();
+          var name = device.alexaName.toLowerCase();
+
+          if( !this.namesOfRoom[room] ) this.namesOfRoom[room] = [];
+          this.namesOfRoom[room].push( name );
+
+          if( !this.roomsOfName[name] ) this.roomsOfName[name] = [];
+          this.roomsOfName[name].push( room );
+        }
+
+        for( var characteristic_type in device.mappings ) {
+          if( characteristic_type == 'On'
+              || characteristic_type == 'Brightness' || characteristic_type == 'TargetPosition'
+              || characteristic_type == 'TargetTemperature' ) {
+            device.subscribe( device.mappings[characteristic_type] );
+          }
+        }
       }
-    }.bind(this, fhem) );
+    }.bind(this) );
 
     this.connections.push( fhem );
   }
@@ -353,11 +297,11 @@ var verifyToken = function(event, callback) {
 
       var error;
       if(statusCode !== 200 && statusCode !== 400) {
-        error = new Error('Request Failed.\n'+
-                          'Status Code: '+ statusCode);
+        error = new Error(`Request Failed.\n` +
+                          `Status Code: ${statusCode}`);
       } else if(!/^application\/json/.test(contentType)) {
-        error = new Error('Invalid content-type.\n'+
-                          'Expected application/json but received '+ contentType);
+        error = new Error(`Invalid content-type.\n` +
+                          `Expected application/json but received ${contentType}`);
       }
       if(error) {
         log.error(error.message);
@@ -380,14 +324,14 @@ var verifyToken = function(event, callback) {
 
           } else if( !this._config.alexa.oauthClientID || this._config.alexa.oauthClientID === parsedData.aud ) {
             log.info('accepted new token');
-            //log.info('accepted new token for: '+ parsedData.aud);
+            //log.info(`accepted new token for: ${parsedData.aud}`);
             log.debug(parsedData);
             accepted_token = token;
             expires = Date.now() + parsedData.exp;
             handler.bind(this)( event, callback );
 
           } else {
-            log.error('clientID '+ parsedData.aud  +'not authorized');
+            log.error(`clientID ${parsedData.aud} not authorized`);
             log.debug(parsedData);
             callback( createError(ERROR_INVALID_ACCESS_TOKEN) );
           }
@@ -397,7 +341,7 @@ var verifyToken = function(event, callback) {
         }
       }.bind(this));
     }.bind(this)).on('error', function(e){
-      console.log('Got error: '+ e.message);
+      console.log(`Got error: ${e.message}`);
       callback( createError(ERROR_INVALID_ACCESS_TOKEN) );
     });
 
@@ -408,7 +352,7 @@ var verifyToken = function(event, callback) {
       handler.bind(this)( event, callback );
 
     } else if( event.session.application && event.session.application.applicationId ) {
-      log.error( 'applicationId '+ event.session.application.applicationId +' not authorized' );
+      log.error( `applicationId ${event.session.application.applicationId} not authorized` );
       callback( createError(ERROR_INVALID_ACCESS_TOKEN) );
 
     } else {
@@ -472,14 +416,13 @@ log.info( event.request.intent.name );
         if( !device ) {
           for( name in this.devices ) {
             var d = this.devices[name];
-            if( !d ) continue;
             if( room && !d.isInRoom(room) ) continue;
             if( device_name === d.alexaName.toLowerCase() ) {
               if( device ) {
                 if( room )
-                  response.response.outputSpeech.text = 'Ich habe mehr als ein Gerät mit Namen '+ device_name +' im Raum '+ room +' gefunden.';
+                  response.response.outputSpeech.text = `Ich habe mehr als ein Gerät mit Namen ${device_name} im Raum ${room} gefunden.`;
                 else
-                  response.response.outputSpeech.text = 'Ich habe mehr als ein Gerät mit Namen '+ device_name +' gefunden. Welchen Raum meinst du?';
+                  response.response.outputSpeech.text = `Ich habe mehr als ein Gerät mit Namen ${device_name} gefunden. Welchen Raum meinst du?`;
 
                 callback( response );
                 return;
@@ -498,18 +441,18 @@ log.info( event.request.intent.name );
         }
         if( !device && !type ) {
           if( room )
-            response.response.outputSpeech.text = 'Ich habe kein Gerät mit Namen '+ device_name +' im Raum '+ room +' gefunden.';
+            response.response.outputSpeech.text = `Ich habe kein Gerät mit Namen ${device_name} im Raum ${room} gefunden.`;
           else
-            response.response.outputSpeech.text = 'Ich habe kein Gerät mit Namen '+device_name +' gefunden.';
+            response.response.outputSpeech.text = `Ich habe kein Gerät mit Namen ${device_name} gefunden.`;
 
           callback( response );
           return;
         }
       }
-log.debug('type: '+ type );
-log.debug('room: '+ room );
-log.debug('device_name: '+ device_name );
-log.debug('device: '+ device );
+log.debug('type: ' + type );
+log.debug('room: ' + room );
+log.debug('device_name: ' + device_name );
+log.debug('device: ' + device );
 
       if( event.request.intent.name === 'AMAZON.StopIntent' ) {
         in_session = false;
@@ -524,36 +467,35 @@ log.debug('device: '+ device );
           var state = '';
           if( device.mappings.On ) {
             var current = device.fhem.reading2homekit(device.mappings.On, device.fhem.cached(device.mappings.On.informId));
-            state = 'ist '+ (current?'an':'aus');
+            state = `ist ${current?'an':'aus'}`;
           }
           if( device.mappings.TargetTemperature ) {
             if( state ) state += ' und ';
-            state += 'steht auf '+ device.fhem.cached(device.mappings.TargetTemperature.informId) +' Grad';
+            state += `steht auf ${device.fhem.cached(device.mappings.TargetTemperature.informId)} Grad`;
 
           }
           if( device.mappings.TargetPosition ) {
             if( state ) state += ' und ';
-            state += 'steht auf '+ device.fhem.cached(device.mappings.TargetPosition.informId) +' Prozent';
+            state += `steht auf ${device.fhem.cached(device.mappings.TargetPosition.informId)} Prozent`;
 
           }
           if( device.mappings['00001001-0000-1000-8000-135D67EC4377'] ) {
             if( state ) state += ' und ';
-            state += 'steht auf '+ device.fhem.cached(device.mappings['00001001-0000-1000-8000-135D67EC4377'].informId) +' Prozent';
+            state += `steht auf ${device.fhem.cached(device.mappings['00001001-0000-1000-8000-135D67EC4377'].informId)} Prozent`;
           }
 
           if( !state )
-            return 'Ich kann das Gerät mit Namen '+ device.alexaName +' nicht abfragen.';
+            return `Ich kann das Gerät mit Namen ${device.alexaName} nicht abfragen.`;
 
           var name = device.alexaName.toLowerCase();
           if( !room && device.room && this.roomsOfName &&  this.roomsOfName[name] && this.roomsOfName[name].length > 1 )
-            return name +' im Raum '+ device.room +' '+ state +'.';
+            return `${name} im Raum ${device.room} ${state}.`;
 
-          return name +' '+ state +'.';
+          return `${name} ${state}.`;
         }
         if( room || type || !device ) {
           for( name in this.devices ) {
             var device = this.devices[name];
-            if( !device ) continue;
             if( type && !device.isOfType(type) ) continue;
             if( room && !device.isInRoom(room) ) continue;
 
@@ -561,12 +503,12 @@ log.debug('device: '+ device );
             response.response.outputSpeech.text += status.bind(this)(device, room);
           }
           if( room && response.response.outputSpeech.text === '' )
-            response.response.outputSpeech.text = 'Ich habe keinen Raum '+ room +' mit Geräten '+ (type?'vom Typ '+event.request.intent.slots.Device.value.toLowerCase():'') +' gefunden.';
+            response.response.outputSpeech.text = `Ich habe keinen Raum ${room} mit Geräten ${type?'vom Typ '+event.request.intent.slots.Device.value.toLowerCase():''} gefunden.`;
           else if( type && response.response.outputSpeech.text === '' )
-            response.response.outputSpeech.text = 'Ich habe keine Geräte vom Typ '+ event.request.intent.slots.Device.value.toLowerCase() +' gefunden.';
+            response.response.outputSpeech.text = `Ich habe keine Geräte vom Typ ${event.request.intent.slots.Device.value.toLowerCase()} gefunden.`;
           else {
             response.response.card = { type: 'Simple',
-                                       title: (room?room:'') +'status',
+                                       title: `${room?room:''}status`,
                                        content: response.response.outputSpeech.text.replace( ', ', '\n' ).replace( ' und ', '\n' ) };
           }
 
@@ -580,7 +522,7 @@ log.debug('device: '+ device );
       } else if( event.request.intent.name === 'SwitchIntent' ) {
         function Switch(device,value,ok) {
           if( !device.mappings.On ) {
-            return 'Ich kann das Gerät mit Namen '+ device_name +' nicht '+ value +'schalten.';
+            return `Ich kann das Gerät mit Namen ${device_name} nicht ${value}schalten.`;
 
           } else if( value === 'aus' ) {
             device.command( device.mappings.On, 0 );
@@ -596,37 +538,36 @@ log.debug('device: '+ device );
             return ok.replace( 'umgeschaltet', (current?'ausgeschaltet':'eingeschaltet') );
 
           } else
-            return 'Ich kann das Gerät mit Namen '+ device_name +' nicht '+ value +'schalten.';
+            return `Ich kann das Gerät mit Namen ${device_name} nicht ${value}schalten.`;
         }
         response.response.outputSpeech.text = 'OK.';
         if( room && device_name )
-          response.response.outputSpeech.text = 'Ich habe '+ artikel +' '+ device_name +' im Raum '+ room +' '+ event.request.intent.slots.Action.value +'geschaltet.';
+          response.response.outputSpeech.text = `Ich habe ${artikel} ${device_name} im Raum ${room} ${event.request.intent.slots.Action.value}geschaltet.`;
         else if( device_name )
-          response.response.outputSpeech.text = 'Ich habe '+ artikel +' '+ device_name +' '+ event.request.intent.slots.Action.value +'geschaltet.';
+          response.response.outputSpeech.text = `Ich habe ${artikel} ${device_name} ${event.request.intent.slots.Action.value}geschaltet.`;
 
         if( (room || type) && !device ) {
           response.response.outputSpeech.text = '';
           for( name in this.devices ) {
             var device = this.devices[name];
-            if( !device ) continue;
             if( device_name && device_name !== device.alexaName.toLowerCase() ) continue;
             if( type && !device.isOfType(type) ) continue;
             if( room && !device.isInRoom(room) ) continue;
 
             response.response.outputSpeech.text = response.response.outputSpeech.text.replace( ' und ', ', ' );
             if( response.response.outputSpeech.text ) response.response.outputSpeech.text += ' und ';
-            response.response.outputSpeech.text += Switch( device, event.request.intent.slots.Action.value, artikel +' '+ device.alexaName );
+            response.response.outputSpeech.text += Switch( device, event.request.intent.slots.Action.value, `${artikel} ${device.alexaName}` );
           }
           if( room && response.response.outputSpeech.text === '' )
-            response.response.outputSpeech.text = 'Ich habe keinen Raum '+ room +' mit Geräten '+ (type?'vom Typ '+event.request.intent.slots.Device.value.toLowerCase():'') +' gefunden.';
+            response.response.outputSpeech.text = `Ich habe keinen Raum ${room} mit Geräten ${type?'vom Typ '+event.request.intent.slots.Device.value.toLowerCase():''} gefunden.`;
           else if( type && response.response.outputSpeech.text === '' )
-            response.response.outputSpeech.text = 'Ich habe keine Geräte vom Typ '+ event.request.intent.slots.Device.value.toLowerCase() +' gefunden.';
+            response.response.outputSpeech.text = `Ich habe keine Geräte vom Typ ${event.request.intent.slots.Device.value.toLowerCase()} gefunden.`;
           else {
-            response.response.outputSpeech.text += ' '+ event.request.intent.slots.Action.value +'geschaltet.';
+            response.response.outputSpeech.text += ` ${event.request.intent.slots.Action.value}geschaltet.`;
             response.response.card = { type: 'Simple',
-                                       title: (room?room:'') +'status',
+                                       title: `${room?room:''}status`,
                                        content: response.response.outputSpeech.text };
-            response.response.outputSpeech.text = 'Ich habe '+ response.response.outputSpeech.text;
+            response.response.outputSpeech.text = 'Ich habe ' + response.response.outputSpeech.text;
           }
 
         } else if( device ) {
@@ -639,14 +580,13 @@ log.debug('device: '+ device );
         response.response.outputSpeech.text = '';
         for( name in this.devices ) {
           var device = this.devices[name];
-          if( !device ) continue;
           if( device.mappings.TargetTemperature ) {
             if( event.request.intent.slots && event.request.intent.slots.Device.value !== device.name
                                            && event.request.intent.slots.Device.value !== device.alexaName )
               next;
 
             if( response.response.outputSpeech.text ) response.response.outputSpeech.text += ', ';
-            response.response.outputSpeech.text += device.alexaName +' ist auf '+ device.fhem.cached(device.mappings.TargetTemperature.informId) +' grad gestellt';
+            response.response.outputSpeech.text += device.alexaName + ' ist auf ' + device.fhem.cached(device.mappings.TargetTemperature.informId) + ' grad gestellt';
           }
         }
 
@@ -654,7 +594,6 @@ log.debug('device: '+ device );
         response.response.outputSpeech.text = '';
         for( name in this.devices ) {
           var device = this.devices[name];
-          if( !device ) continue;
           if( room && !device.isInRoom(room) ) continue;
           response.response.outputSpeech.text = response.response.outputSpeech.text.replace( ' und ', ', ' );
           if( response.response.outputSpeech.text ) response.response.outputSpeech.text += ' und ';
@@ -765,7 +704,7 @@ var handleDiscovery = function(event) {
                   modelName: 'FHEM'+ (device.model ? device.model : '<unknown>'),
                   version: '<unknown>',
                   friendlyName: device.alexaName,
-                  friendlyDescription: 'name: '+ device.name +', alias: '+ device.alias + (device.room?', room: '+ device.room:''),
+                  friendlyDescription: 'name: ' + device.name + ', alias: ' + device.alias + (device.room?', room: ' + device.room:''),
                   isReachable: true,
                   actions: [],
                   additionalApplianceDetails: { device: device.device },
@@ -1135,6 +1074,6 @@ var createError = function(error, payload) {
 
 var log2 = function(title, msg) {
 
-  console.log('**** '+ title +': '+ JSON.stringify(msg));
+  console.log('**** ' + title + ': ' + JSON.stringify(msg));
 
 }// log

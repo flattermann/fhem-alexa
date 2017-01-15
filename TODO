@@ -1,0 +1,14 @@
+
+- zurück mergen nach homebridge-fhem
+  Characteristic.Perms.WRITE und Characteristic.Units.PERCENTAGE -> REQUEST_SET_PERCENTAGE,REQUEST_INCREMENT_PERCENTAGE,REQUEST_DECREMENT_PERCENTAGE
+- handle events for DEFINED, DELETED, ATTR, ...
+- custom skill
+  wecker, antworten
+
+- lambda.js aufräumen
+
+- NAT-UPNP fixen, konfigurierbar machen, refresh mapping
+- NAT-PMP refresh mapping, konfigurierbar machen (auch gateway)
+
+- proxy?
+- 
