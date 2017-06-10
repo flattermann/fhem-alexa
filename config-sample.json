@@ -1,5 +1,6 @@
 {
     "alexa": {
+        "port": 3000,
         "name": "Alexa TEST",
         "keyFile": "./key.pem",
         "certFile": "./cert.pem",
@@ -14,6 +15,7 @@
             "name": "FHEM",
             "server": "10.0.1.21",
             "port": "8083",
+            "webname": "fhem",
             "filter": "room=alexa"
         }
     ]

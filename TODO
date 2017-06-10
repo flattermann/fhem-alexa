@@ -18,10 +18,10 @@
 - bei mehreren möglichen characteristics die passende anhand des value finden
   intentOfValue oder indexOf auf valuesOfIntent
 
+- FIXME: nocache, use query() instead of cached()
+
 - fhemIntent
- - notify -> erledigt
- - set,get,attr
- - perl code
+  continue? in antwort
 
 - property bei kommandos mit einbauen
   stelle die Helligkeit ...
@@ -34,13 +34,17 @@ frage
    welche <property> hat <article> <device> [[<preposition>] <room>]
    wie [hoch] ist <article> [<property>] (<device>|<room>)
  - nach status
+ - 'wie warm ist es im wohnzimmer', 'wie ist die temperatur im wohnzimmer',
+   'wie warm ist die heizung im wohnzimmer', 'welche temperatur ist im wohnzimmer'
+   'welche temperatur hat die heizung [im wohnzimmer]'
 
 mehrfach werte setzen:
  - wecker mit wochentag und uhrzeit
 
-alexaConfirmationLevel=2,1
+alexaConfirmationLevel=2,1,0
   2 -> lang
   1 -> ok
+  0 -> stumm (nur bei einmaligem aufruf)
 
 alexaStatusLevel=2,1
   2 -> alle konfigurierten characteristics
