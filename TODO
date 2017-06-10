@@ -18,6 +18,11 @@
 - bei mehreren möglichen characteristics die passende anhand des value finden
   intentOfValue oder indexOf auf valuesOfIntent
 
+- fhemIntent
+ - notify -> erledigt
+ - set,get,attr
+ - perl code
+
 - property bei kommandos mit einbauen
   stelle die Helligkeit ...
   stelle die Farbe ...
